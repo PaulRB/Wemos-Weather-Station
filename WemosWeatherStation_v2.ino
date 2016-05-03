@@ -10,15 +10,20 @@ extern "C" {
 
 #include <ESP8266WiFi.h>
 #include <Ticker.h>
+#include <dht11.h>
 
+dht11 DHT11;
+
+#define DHT11PIN D3
 #define WIND_DIR_SENSOR D5
 #define WIND_SPEED_SENSOR D6
 #define RAIN_SENSOR D7
 #define BATT_LEVEL A0
 
-#define SERVER_UPDATE_PERIOD 30000UL
+#define SERVER_UPDATE_PERIOD 900000UL
 #define WIND_GUST_PERIOD 6000UL
-#define WIND_DIR_PERIOD 1000UL
+#define WIND_DIR_PERIOD 250UL
+#define SENSOR_UPDATE_PERIOD 5UL
 
 // Use WiFiClient class to create TCP connections
 WiFiClient wsClient;
@@ -26,11 +31,11 @@ WiFiClient wsClient;
 // Use Tickers to schedule various tasks
 Ticker windDirTicker;
 Ticker windGustTicker;
-Ticker updateServerTicker;
+Ticker sensorTicker;
 
-const char ssid[]     = "ssid";
-const char password[] = "password";
-const char host[]     = "www.hostname.co.uk";
+const char ssid[]     = "Granary5";
+const char password[] = "sparkym00se";
+const char host[]     = "www.databaseconnect.co.uk";
 
 long windDirTot;
 long windDirCount;
@@ -38,28 +43,35 @@ long windDirPrev;
 long windDirNow;
 long maxWindGustCount;
 
-volatile long windSpeedCount = 0;
-volatile long windGustCount = 0;
-volatile long rainCount = 0;
+long windSpeedCount = 0;
+long windGustCount = 0;
+long rainCount = 0;
+
+int lastWindSpeedSensor = HIGH;
+int lastRainSensor = HIGH;
 
 const int reading[] = { 46, 54, 66, 90, 119, 142, 173, 203, 231, 254, 267, 284, 297, 307, 317, 328};
 const int compass[] = {292, 247, 270, 337, 315, 22,  0, 202, 225, 67, 45, 157, 180, 112, 135, 90};
+const double e = 2.71828;
 
-void windSpeedInterrupt() {
+void checkSensors() {
 
   // The wind speed sensor contains a magnet which rotates with the anemometer cups
   // The magnet activates a reed switch which opens and closes twice per rotation
-  windSpeedCount++;
-  windGustCount++;
-}
-
-void rainInterrupt() {
+  if (digitalRead(WIND_SPEED_SENSOR) != lastWindSpeedSensor) {
+    windSpeedCount++;
+    windGustCount++;
+    lastWindSpeedSensor = !lastWindSpeedSensor;
+  }
 
   // The rain sensor contains a magnet attached to a see-saw mechanism
   // with buckets on each side. As the see-saw tips, one bucket is emptied and
   // the other bucket begins to fill.
   // The magnet activates a reed switch as the see-saw tips.
-  rainCount++;
+  if (digitalRead(RAIN_SENSOR) != lastRainSensor) {
+    if (lastRainSensor == HIGH) rainCount++;
+    lastRainSensor = !lastRainSensor;
+  }
 }
 
 void measureWindGust() {
@@ -69,9 +81,9 @@ void measureWindGust() {
 
   // New highest wind gust?
   if (windGustCount > maxWindGustCount) maxWindGustCount = windGustCount;
+
   // Zero gust count for next period
   windGustCount = 0;
-
 }
 
 void measureWindDir() {
@@ -120,6 +132,10 @@ void measureWindDir() {
 
 void updateServer() {
 
+  windDirTicker.detach();
+  windGustTicker.detach();
+  sensorTicker.detach();
+
   Serial.println();
   Serial.println("Calculating Sensor Values");
 
@@ -127,6 +143,25 @@ void updateServer() {
 
   Serial.print("batt=");
   Serial.print(battLevelNow);
+
+  //Read temp/humidity sensor
+  double humidityNow, temperatureNow, absoluteHumidityNow;
+  if (DHT11.read(DHT11PIN) == DHTLIB_OK) {
+    humidityNow = DHT11.humidity;
+    temperatureNow = DHT11.temperature;
+    absoluteHumidityNow = (6.112 * pow(e, (17.67 * temperatureNow) / (temperatureNow + 243.5)) * humidityNow * 2.1674) / (273.15 + temperatureNow);
+  }
+  else {
+    humidityNow = -999;
+    temperatureNow = -999;
+    absoluteHumidityNow = -999;
+  }
+  Serial.print(" temp=");
+  Serial.print(temperatureNow);
+  Serial.print(" humidity=");
+  Serial.print(humidityNow);
+  Serial.print(" Abs humidity=");
+  Serial.print(absoluteHumidityNow);
 
   // Calculate average wind direction over the reporting period
   double windDir;
@@ -164,12 +199,7 @@ void updateServer() {
   Serial.print(rainRate);
 
   Serial.println();
-
-  //WiFi.forceSleepWake();
-
-  Serial.println();
-  Serial.print("Connecting to ");
-  Serial.print(ssid);
+  Serial.print("Connecting");
 
   unsigned long startTime = millis();
   WiFi.begin(ssid, password);
@@ -187,7 +217,11 @@ void updateServer() {
   }
   else {
     Serial.println();
-    Serial.print("WiFi connected, IP address: ");
+    Serial.print("WiFi connected, SSID: ");
+    Serial.print(WiFi.SSID());
+    Serial.print(" signal: ");
+    Serial.print(WiFi.RSSI());
+    Serial.print(" IP address: ");
     Serial.println(WiFi.localIP());
 
     Serial.println();
@@ -211,6 +245,24 @@ void updateServer() {
         sensors += ",WD";
         values += ",";
         values += windDir;
+      }
+
+      if (temperatureNow >= -50 && temperatureNow <= 50) {
+        sensors += ",TO";
+        values += ",";
+        values += temperatureNow;
+      }
+
+      if (humidityNow >= 0 && humidityNow <= 100) {
+        sensors += ",HO";
+        values += ",";
+        values += humidityNow;
+      }
+
+      if (absoluteHumidityNow >= 0 && absoluteHumidityNow <= 100) {
+        sensors += ",AO";
+        values += ",";
+        values += absoluteHumidityNow;
       }
 
       if (windSpeed >= 0 && windSpeed <= 200) {
@@ -267,10 +319,8 @@ void updateServer() {
 
     }
 
-    //WiFi.disconnect();
-    //WiFi.forceSleepBegin(30000000);
+    WiFi.disconnect();
   }
-
 
   // Zero max wind gust & wind & rain counts for next reporting period
   maxWindGustCount = 0;
@@ -279,30 +329,33 @@ void updateServer() {
   windSpeedCount = 0;
   rainCount = 0;
 
+  // Set schedules for various tasks
+  windDirTicker.attach_ms(WIND_DIR_PERIOD, measureWindDir);
+  windGustTicker.attach_ms(WIND_GUST_PERIOD, measureWindGust);
+  sensorTicker.attach_ms(SENSOR_UPDATE_PERIOD, checkSensors);
 }
 
 void setup() {
 
   Serial.begin(115200);
+  Serial.println("Started.");
 
   WiFi.persistent(false);
 
   // Set schedules for various tasks
   windDirTicker.attach_ms(WIND_DIR_PERIOD, measureWindDir);
   windGustTicker.attach_ms(WIND_GUST_PERIOD, measureWindGust);
-  //updateServerTicker.attach_ms(SERVER_UPDATE_PERIOD, updateServer);
+  sensorTicker.attach_ms(SENSOR_UPDATE_PERIOD, checkSensors);
 
   pinMode(WIND_SPEED_SENSOR, INPUT_PULLUP);
   pinMode(RAIN_SENSOR, INPUT_PULLUP);
 
-  attachInterrupt(WIND_SPEED_SENSOR, windSpeedInterrupt, CHANGE);
-  attachInterrupt(RAIN_SENSOR, rainInterrupt, FALLING);
+  wifi_fpm_set_sleep_type(LIGHT_SLEEP_T); // Enable light sleep mode
 
-  wifi_fpm_set_sleep_type(LIGHT_SLEEP_T); // Enable light sleep mode,
-  //WiFi.forceSleepBegin();
 }
 
 void loop() {
   updateServer();
+  //WiFi.forceSleepBegin(SERVER_UPDATE_PERIOD * 1000);
   delay(SERVER_UPDATE_PERIOD);
 }
