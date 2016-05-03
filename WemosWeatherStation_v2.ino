@@ -33,9 +33,9 @@ Ticker windDirTicker;
 Ticker windGustTicker;
 Ticker sensorTicker;
 
-const char ssid[]     = "Granary5";
-const char password[] = "sparkym00se";
-const char host[]     = "www.databaseconnect.co.uk";
+const char ssid[]     = "SID";
+const char password[] = "password";
+const char host[]     = "www.hostname.co.uk";
 
 long windDirTot;
 long windDirCount;
