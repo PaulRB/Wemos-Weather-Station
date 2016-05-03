@@ -356,6 +356,6 @@ void setup() {
 
 void loop() {
   updateServer();
-  //WiFi.forceSleepBegin(SERVER_UPDATE_PERIOD * 1000);
+  WiFi.forceSleepBegin(SERVER_UPDATE_PERIOD * 1000);
   delay(SERVER_UPDATE_PERIOD);
 }
