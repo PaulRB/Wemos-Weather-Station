@@ -36,7 +36,7 @@ AM2320 tempHumidSensor;
 
 const char ssid[]     = "SSID";
 const char password[] = "PASSWORD";
-const char host[]     = "www.databaseconnect.co.uk";
+const char host[]     = "www.hostname.co.uk";
 
 long windDirTot;
 long windDirCount;
