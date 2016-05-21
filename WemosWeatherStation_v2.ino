@@ -34,8 +34,8 @@ Ticker sensorTicker;
 // AM2320 i2c temp & humidity sensor
 AM2320 tempHumidSensor;
 
-const char ssid[]     = "granary";
-const char password[] = "sparkym00se";
+const char ssid[]     = "SSID";
+const char password[] = "PASSWORD";
 const char host[]     = "www.databaseconnect.co.uk";
 
 long windDirTot;
