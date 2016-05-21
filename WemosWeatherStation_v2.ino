@@ -10,11 +10,9 @@ extern "C" {
 
 #include <ESP8266WiFi.h>
 #include <Ticker.h>
-#include <dht11.h>
+#include <Wire.h>
+#include <AM2320.h>
 
-dht11 DHT11;
-
-#define DHT11PIN D3
 #define WIND_DIR_SENSOR D5
 #define WIND_SPEED_SENSOR D6
 #define RAIN_SENSOR D7
@@ -33,9 +31,12 @@ Ticker windDirTicker;
 Ticker windGustTicker;
 Ticker sensorTicker;
 
-const char ssid[]     = "SID";
-const char password[] = "password";
-const char host[]     = "www.hostname.co.uk";
+// AM2320 i2c temp & humidity sensor
+AM2320 tempHumidSensor;
+
+const char ssid[]     = "granary";
+const char password[] = "sparkym00se";
+const char host[]     = "www.databaseconnect.co.uk";
 
 long windDirTot;
 long windDirCount;
@@ -50,8 +51,8 @@ long rainCount = 0;
 int lastWindSpeedSensor = HIGH;
 int lastRainSensor = HIGH;
 
-const int reading[] = { 46, 54, 66, 90, 119, 142, 173, 203, 231, 254, 267, 284, 297, 307, 317, 328};
-const int compass[] = {292, 247, 270, 337, 315, 22,  0, 202, 225, 67, 45, 157, 180, 112, 135, 90};
+const int reading[] = { 45,  53,  64, 88, 116, 138, 168, 198, 225, 248, 260, 276, 289, 298, 309,  320};
+const int compass[] = {292, 247, 270, 337, 315, 22, 0, 202, 225, 67, 45, 157, 180, 112, 135, 90, -999};
 const double e = 2.71828;
 
 void checkSensors() {
@@ -72,6 +73,7 @@ void checkSensors() {
     if (lastRainSensor == HIGH) rainCount++;
     lastRainSensor = !lastRainSensor;
   }
+
 }
 
 void measureWindGust() {
@@ -84,6 +86,7 @@ void measureWindGust() {
 
   // Zero gust count for next period
   windGustCount = 0;
+
 }
 
 void measureWindDir() {
@@ -113,12 +116,12 @@ void measureWindDir() {
   // noise, so the reading[] array contains values
   // mid-way between the expected values.
   int i = 0;
-  while (i <= 15 && readingNow >= reading[i]) i++;
+  while (i <= 16 && readingNow >= reading[i]) i++;
   if (i <= 15) {
     windDirNow = compass[i];
     // Check if sensor has swept through 0 degrees, moving in either direction
-    if (windDirNow - windDirPrev > 180) windDirNow -= 360;
-    if (windDirPrev - windDirNow > 180) windDirNow += 360;
+    if (windDirNow - windDirPrev > 180L) windDirNow -= 360L;
+    if (windDirPrev - windDirNow > 180L) windDirNow += 360L;
     // Update total and count of data points for calculating average
     windDirTot += windDirNow;
     windDirCount++;
@@ -126,15 +129,12 @@ void measureWindDir() {
   }
   else {
     // The wind direction sensor is disconnected or faulty
-    windDirCount = 0;
+    windDirCount = 0L;
   }
+
 }
 
 void updateServer() {
-
-  windDirTicker.detach();
-  windGustTicker.detach();
-  sensorTicker.detach();
 
   Serial.println();
   Serial.println("Calculating Sensor Values");
@@ -146,9 +146,9 @@ void updateServer() {
 
   //Read temp/humidity sensor
   double humidityNow, temperatureNow, absoluteHumidityNow;
-  if (DHT11.read(DHT11PIN) == DHTLIB_OK) {
-    humidityNow = DHT11.humidity;
-    temperatureNow = DHT11.temperature;
+  if (tempHumidSensor.Read() == 0) {
+    humidityNow = tempHumidSensor.h;
+    temperatureNow = tempHumidSensor.t;
     absoluteHumidityNow = (6.112 * pow(e, (17.67 * temperatureNow) / (temperatureNow + 243.5)) * humidityNow * 2.1674) / (273.15 + temperatureNow);
   }
   else {
@@ -165,14 +165,14 @@ void updateServer() {
 
   // Calculate average wind direction over the reporting period
   double windDir;
-  if (windDirCount > 0) {
+  if (windDirCount > 0L) {
     windDir = windDirTot / windDirCount;
-    while (windDir >= 360) windDir -= 360;
-    while (windDir < 0) windDir += 360;
+    while (windDir >= 360.0) windDir -= 360.0;
+    while (windDir < 0.0) windDir += 360.0;
   }
   else {
     // The wind direction sensor is disconnected or faulty
-    windDir = -999;
+    windDir = -999.9;
   }
   Serial.print(" windDir=");
   Serial.print(windDir);
@@ -199,7 +199,7 @@ void updateServer() {
   Serial.print(rainRate);
 
   Serial.println();
-  Serial.print("Connecting");
+  Serial.print("Connecting to WiFi");
 
   unsigned long startTime = millis();
   WiFi.begin(ssid, password);
@@ -216,6 +216,7 @@ void updateServer() {
     Serial.println("WiFi connection failed");
   }
   else {
+
     Serial.println();
     Serial.print("WiFi connected, SSID: ");
     Serial.print(WiFi.SSID());
@@ -241,7 +242,7 @@ void updateServer() {
         values = battLevelNow;
       }
 
-      if (windDir >= 0 && windDir <= 360) {
+      if (windDir >= 0.0 && windDir <= 360.0) {
         sensors += ",WD";
         values += ",";
         values += windDir;
@@ -307,6 +308,7 @@ void updateServer() {
       }
 
       Serial.println("Response from server:");
+      Serial.println("----------------------------------------");
       // Read all the lines of the reply from server and print them to Serial
       while (wsClient.available()) {
         String line = wsClient.readStringUntil('\r');
@@ -314,38 +316,32 @@ void updateServer() {
       }
 
       Serial.println();
-      Serial.print("Closing connection. Total time: ");
+      Serial.println("----------------------------------------");
+      Serial.print("Time taken: ");
       Serial.println( millis() - startTime);
 
     }
-
+    Serial.println("Disconnecting Wifi");
     WiFi.disconnect();
   }
 
   // Zero max wind gust & wind & rain counts for next reporting period
+  Serial.println("Zeroing counts");
   maxWindGustCount = 0;
   windDirTot = 0;
   windDirCount = 0;
   windSpeedCount = 0;
   rainCount = 0;
 
-  // Set schedules for various tasks
-  windDirTicker.attach_ms(WIND_DIR_PERIOD, measureWindDir);
-  windGustTicker.attach_ms(WIND_GUST_PERIOD, measureWindGust);
-  sensorTicker.attach_ms(SENSOR_UPDATE_PERIOD, checkSensors);
 }
 
 void setup() {
 
   Serial.begin(115200);
+  Wire.begin();
   Serial.println("Started.");
 
   WiFi.persistent(false);
-
-  // Set schedules for various tasks
-  windDirTicker.attach_ms(WIND_DIR_PERIOD, measureWindDir);
-  windGustTicker.attach_ms(WIND_GUST_PERIOD, measureWindGust);
-  sensorTicker.attach_ms(SENSOR_UPDATE_PERIOD, checkSensors);
 
   pinMode(WIND_SPEED_SENSOR, INPUT_PULLUP);
   pinMode(RAIN_SENSOR, INPUT_PULLUP);
@@ -355,7 +351,29 @@ void setup() {
 }
 
 void loop() {
+
   updateServer();
-  WiFi.forceSleepBegin(SERVER_UPDATE_PERIOD * 1000);
+
+  Serial.println("Starting modem sleep");
+  WiFi.forceSleepBegin();
+  delay(100);
+
+  // Set schedules for various tasks
+  Serial.println("Starting scheduled tasks");
+  windDirTicker.attach_ms(WIND_DIR_PERIOD, measureWindDir);
+  windGustTicker.attach_ms(WIND_GUST_PERIOD, measureWindGust);
+  sensorTicker.attach_ms(SENSOR_UPDATE_PERIOD, checkSensors);
+
+  Serial.println("Waiting for server update period");
   delay(SERVER_UPDATE_PERIOD);
+
+  Serial.println("Disabling scheduled tasks");
+  windDirTicker.detach();
+  windGustTicker.detach();
+  sensorTicker.detach();
+
+  Serial.println("Waking modem");
+  WiFi.forceSleepWake();
+  delay(100);
+
 }
