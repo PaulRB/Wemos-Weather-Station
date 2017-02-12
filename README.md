@@ -1,5 +1,6 @@
 # Wemos-Weather-Station
 Outdoor Weather Station with Wind Speed, direction & Rainfall sensors
+![Alt text](https://github.com/PaulRB/Wemos-Weather-Station/blob/master/IMG_20161112_151442.jpg?raw=true)
 ![Alt text](https://github.com/PaulRB/Wemos-Weather-Station/blob/master/OutdoorSensorV3.png?raw=true)
 ![Alt text](https://github.com/PaulRB/Wemos-Weather-Station/blob/master/IMG_20160711_180757.jpg?raw=true)
 ![Alt text](https://github.com/PaulRB/Wemos-Weather-Station/blob/master/IMG_20160827_165125.jpg?raw=true)
