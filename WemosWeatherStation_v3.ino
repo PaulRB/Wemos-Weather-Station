@@ -13,6 +13,7 @@ extern "C" {
 #include <ESP8266WiFi.h>
 #include <Wire.h>
 #include <AM2320.h>
+#include <BH1750.h>
 #include <SoftwareSerial.h>
 
 #define BATT_LEVEL A0
@@ -30,9 +31,16 @@ SoftwareSerial slaveMCU(SLAVE_RX, SLAVE_TX, false, 64);
 // AM2320 i2c temp & humidity sensor
 AM2320 tempHumidSensor;
 
-const char ssid[]     = "SSID";
-const char password[] = "password";
-const char host[]     = "www.hostname.co.uk";
+// BH1750 Lux Sensor
+BH1750 lightMeter;
+
+const char ssid[]     = "granary2";
+const char password[] = "sparkym00se";
+const char host[]     = "www.databaseconnect.co.uk";
+
+IPAddress ip(192,168,1,205);
+IPAddress gateway(192,168,1,1);
+IPAddress subnet(255,255,255,0);
 
 const double e = 2.71828;
 
@@ -49,6 +57,7 @@ void setup() {
   Serial.begin(115200);
   Wire.begin();
   Serial.println("Started.");
+  lightMeter.begin();
 
   WiFi.persistent(false);
   wifi_fpm_set_sleep_type(LIGHT_SLEEP_T); // Enable light sleep mode
@@ -77,6 +86,12 @@ void loop() {
     temperatureNow = -999;
     absoluteHumidityNow = -999;
   }
+
+  // Read Lux (light level) sensor
+  double luxNow = lightMeter.readLightLevel();
+
+  Serial.print(" lux=");
+  Serial.print(luxNow);
   Serial.print(" temp=");
   Serial.print(temperatureNow);
   Serial.print(" humidity=");
@@ -124,8 +139,8 @@ void loop() {
 
   // Calculate wind gust speed, in Km/hr, over period of 6s
   // Note: 1 rotation per second = 2.4 Km/hr
-  // 4 changes per rotation, so 1 change per millisecond = 600 Km/hr
-  double windGustSpeed = 600.0 * windGustCount / WIND_GUST_PERIOD;
+  // 2 changes per rotation, so 1 change per millisecond = 1200 Km/hr
+  double windGustSpeed = 1200.0 * windGustCount / WIND_GUST_PERIOD;
   Serial.print(" maxWindGust=");
   Serial.print(windGustSpeed);
 
@@ -141,19 +156,23 @@ void loop() {
 
   unsigned long startTime = millis();
   WiFi.begin(ssid, password);
+  WiFi.config(ip, gateway, subnet);
   WiFi.mode(WIFI_STA); // Station Mode
   WiFi.hostname("Weather Station");
 
   while (WiFi.status() != WL_CONNECTED && millis() - startTime < 30000UL) {
     delay(1000);
+    digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
     Serial.print(".");
   }
 
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println();
     Serial.println("WiFi connection failed");
+    digitalWrite(LED_BUILTIN, LOW);
   }
   else {
+    digitalWrite(LED_BUILTIN, HIGH);
 
     Serial.println();
     Serial.print("WiFi connected, SSID: ");
@@ -220,6 +239,12 @@ void loop() {
         sensors += ",RN";
         values += ",";
         values += rainRate;
+      }
+
+      if (luxNow >= 0 && luxNow <= 50000) {
+        sensors += ",LX";
+        values += ",";
+        values += luxNow;
       }
 
       // We now create a URI for the request
