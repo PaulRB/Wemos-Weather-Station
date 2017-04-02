@@ -1,6 +1,7 @@
 # Wemos-Weather-Station
 Outdoor Weather Station with Wind Speed, direction & Rainfall sensors
 UPDATE: now with Lux/light level sensor
+![Alt text](https://github.com/PaulRB/Wemos-Weather-Station/blob/master/IMG_20170402_141529.jpg?raw=true)
 ![Alt text](https://github.com/PaulRB/Wemos-Weather-Station/blob/master/IMG_20170402_122711.jpg?raw=true)
 UPDATE: now with Wemos Mini Pro + external antenna
 ![Alt text](https://github.com/PaulRB/Wemos-Weather-Station/blob/master/IMG_20170226_153004.jpg?raw=true)
