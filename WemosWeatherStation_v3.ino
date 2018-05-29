@@ -38,9 +38,9 @@ BH1750 lightMeter;
 // VEML_6070 UV Sensor
 Adafruit_VEML6070 uv = Adafruit_VEML6070();
 
-const char ssid[]     = "granary2";
-const char password[] = "sparkym00se";
-const char host[]     = "www.databaseconnect.co.uk";
+const char ssid[]     = "SSID";
+const char password[] = "PASSWORD";
+const char host[]     = "www.hostname.co.uk";
 
 IPAddress ip(192,168,1,205);
 IPAddress gateway(192,168,1,1);
