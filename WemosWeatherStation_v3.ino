@@ -14,6 +14,7 @@ extern "C" {
 #include <Wire.h>
 #include <AM2320.h>
 #include <BH1750.h>
+#include <Adafruit_VEML6070.h>
 #include <SoftwareSerial.h>
 
 #define BATT_LEVEL A0
@@ -33,6 +34,9 @@ AM2320 tempHumidSensor;
 
 // BH1750 Lux Sensor
 BH1750 lightMeter;
+
+// VEML_6070 UV Sensor
+Adafruit_VEML6070 uv = Adafruit_VEML6070();
 
 const char ssid[]     = "granary2";
 const char password[] = "sparkym00se";
@@ -58,6 +62,7 @@ void setup() {
   Wire.begin();
   Serial.println("Started.");
   lightMeter.begin();
+  uv.begin(VEML6070_1_T);
 
   WiFi.persistent(false);
   wifi_fpm_set_sleep_type(LIGHT_SLEEP_T); // Enable light sleep mode
@@ -90,8 +95,13 @@ void loop() {
   // Read Lux (light level) sensor
   double luxNow = lightMeter.readLightLevel();
 
+  // Read UV Level
+  double uvNow = uv.readUV()*0.05625; //Convert to W/m2
+
   Serial.print(" lux=");
   Serial.print(luxNow);
+  Serial.print(" uv=");
+  Serial.print(uvNow);
   Serial.print(" temp=");
   Serial.print(temperatureNow);
   Serial.print(" humidity=");
@@ -241,10 +251,16 @@ void loop() {
         values += rainRate;
       }
 
-      if (luxNow >= 0 && luxNow <= 50000) {
+      if (luxNow >= 0 && luxNow <= 65000) {
         sensors += ",LX";
         values += ",";
         values += luxNow;
+      }
+
+      if (uvNow >= 0 && uvNow <= 65000) {
+        sensors += ",UV";
+        values += ",";
+        values += uvNow;
       }
 
       // We now create a URI for the request
